@@ -37,3 +37,17 @@ extern std::atomic<int> lane_change_direction;
 extern std::atomic<int> stop_area;
 // ==================== 结束一切线程相关变量 ====================
 extern std::atomic<bool> allfinishflag;
+// (新增) ================== PID 双参数变量 ==================
+// 存储两套PID参数：一套用于常规巡线，一套用于锥桶绕行
+
+// 常规巡线PID
+extern double g_orig_kp;
+extern double g_orig_ki;
+extern double g_orig_kd;
+extern double g_orig_limit; // (新增) 原始PID限幅
+
+// 锥桶绕行PID
+extern double g_cone_kp;
+extern double g_cone_ki;
+extern double g_cone_kd;
+extern double g_cone_limit; // (新增) 锥桶PID限幅

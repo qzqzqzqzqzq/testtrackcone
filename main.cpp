@@ -68,10 +68,25 @@ int main() {
         break;
     }
     // +++ END OF TEST MODE SELECTION +++
+// (修改) PID 参数输入
+    std::cout << "Please enter ORIGINAL PID parameters (Kp Ki Kd Limit): ";
+    std::cin >> g_orig_kp >> g_orig_ki >> g_orig_kd >> g_orig_limit;
 
-    double kp, ki, kd;
-    std::cout << "Please enter PID parameters (Kp Ki Kd): ";
-    std::cin >> kp >> ki >> kd;
+    // (NEW) Ask for cone PID parameters if motor is on
+    if (motor_on) {
+        std::cout << "Please enter CONE AVOIDANCE PID parameters (Kp Ki Kd Limit): ";
+        std::cin >> g_cone_kp >> g_cone_ki >> g_cone_kd >> g_cone_limit;
+    }
+    else {
+        // Motor is off, just use the first set for cone PID as well
+        g_cone_kp = g_orig_kp;
+        g_cone_ki = g_orig_ki;
+        g_cone_kd = g_orig_kd;
+        g_cone_limit = g_orig_limit;
+    }
+
+    std::cout << "[INFO] Original PID Limit: " << g_orig_limit << std::endl;
+    std::cout << "[INFO] Cone PID Limit: " << g_cone_limit << std::endl;
 
     //初始化
     gpio_init();
@@ -91,7 +106,8 @@ int main() {
     }
 
     servo_init(105, 90, 120);
-    pid_init(kp, ki, kd, 15); // Use the PID values you just entered
+    // (修改) 用全局原始PID参数初始化PID
+    pid_init(g_orig_kp, g_orig_ki, g_orig_kd, g_orig_limit);
 
     //测试
     VisionTaskState = State::ToBlueCone; // From vision.h

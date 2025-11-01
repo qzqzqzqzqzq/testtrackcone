@@ -12,6 +12,7 @@
 #include "message.h"
 #include "globals.h"
 #include "timer.h"
+#include "pid.h"
 
 #include "ts_queue.h"
 
@@ -441,6 +442,10 @@ std::pair<int, int> dect_cone(cv::Mat& mask_cone, cv::Mat& debug_image)
         ConeInformation.consecutive_missed_cone = 0;
 
         if (ConeInformation.consecutive_detected_cone >= ConeInformation.detect_threshold_frames_cone) {
+            std::cout << "[PID] Switching to CONE parameters." << std::endl;
+            // (修改) 使用带独立限幅的锥桶PID参数
+            pid_set(g_cone_kp, g_cone_ki, g_cone_kd, g_cone_limit);
+            pid_clear(); // 清空积分项和前误差
             ConeInformation.findcone = true;
         }
         // --- 新逻辑结束 ---
@@ -466,6 +471,10 @@ std::pair<int, int> dect_cone(cv::Mat& mask_cone, cv::Mat& debug_image)
         if (ConeInformation.findcone == true &&
             ConeInformation.consecutive_missed_cone >= ConeInformation.miss_threshold_frames_cone)
         {
+            std::cout << "[PID] Switching to ORIGINAL parameters." << std::endl;
+            // (修改) 使用带独立限幅的原始PID参数
+            pid_set(g_orig_kp, g_orig_ki, g_orig_kd, g_orig_limit);
+            pid_clear(); // 清空积分项和前误差
             ConeInformation.detection_over = true;
         }
         // --- 新逻辑结束 ---
