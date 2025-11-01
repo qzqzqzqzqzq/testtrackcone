@@ -436,7 +436,15 @@ std::pair<int, int> dect_cone(cv::Mat& mask_cone, cv::Mat& debug_image)
 
         ConeInformation.cone_left_x = x;
         ConeInformation.cone_right_x = x + w;
-        ConeInformation.findcone = true;
+        // --- 新的计数逻辑（检测到） ---
+        ConeInformation.consecutive_detected_cone++;
+        ConeInformation.consecutive_missed_cone = 0;
+
+        if (ConeInformation.consecutive_detected_cone >= ConeInformation.detect_threshold_frames_cone) {
+            ConeInformation.findcone = true;
+        }
+        // --- 新逻辑结束 ---
+
         // +++ 新增调试代码块 +++
         // 检查结构体中的 debug 标志
         if (ConeInformation.debug_enabled) {
@@ -449,14 +457,18 @@ std::pair<int, int> dect_cone(cv::Mat& mask_cone, cv::Mat& debug_image)
         return std::make_pair(x, x + w);
     }
     else {
-        if (ConeInformation.findcone == false)
-        {
-            ConeInformation.detection_over = false;
-        }
-        else
+        // --- 新的计数逻辑（未检测到） ---
+        ConeInformation.consecutive_missed_cone++;
+        ConeInformation.consecutive_detected_cone = 0;
+
+        // 仅当之前检测到过锥桶（findcone == true）
+        // 且连续多帧都未检测到时，才认为检测结束
+        if (ConeInformation.findcone == true &&
+            ConeInformation.consecutive_missed_cone >= ConeInformation.miss_threshold_frames_cone)
         {
             ConeInformation.detection_over = true;
         }
+        // --- 新逻辑结束 ---
         return std::make_pair(-1, -1);
     }
 }

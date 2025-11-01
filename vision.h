@@ -42,6 +42,12 @@ int cone_left_x = 0;              // 锥桶左边界
 int cone_right_x = 0;             // 锥桶右边界
 
 bool debug_enabled = true;  // 锥桶调试显示总开关
+
+int consecutive_detected_cone = 0;  // 连续检测到的帧数
+int consecutive_missed_cone = 0;    // 连续未检测到的帧数
+
+int detect_threshold_frames_cone = 3;  // 连续3帧检测到才算真正识别到
+int miss_threshold_frames_cone = 5;    // 连续5帧检测不到才认为锥桶任务结束
 };
 //用于储存斑马线任务信息
 struct ZebraInfo {
