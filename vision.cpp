@@ -294,7 +294,7 @@ void updateTargetRoute(const cv::Mat& frame_clone)
         lane_error.store(error);
     }
     if (ConeInformation.detection_over == true) {
-        VisionTaskState = State::ToZebraCrossing;
+        //VisionTaskState = State::ToZebraCrossing;
     }
 }
 std::pair<double, double>  calcAverageX_left_right(
@@ -442,10 +442,14 @@ std::pair<int, int> dect_cone(cv::Mat& mask_cone, cv::Mat& debug_image)
         ConeInformation.consecutive_missed_cone = 0;
 
         if (ConeInformation.consecutive_detected_cone >= ConeInformation.detect_threshold_frames_cone) {
-            std::cout << "[PID] Switching to CONE parameters." << std::endl;
-            // (修改) 使用带独立限幅的锥桶PID参数
-            pid_set(g_cone_kp, g_cone_ki, g_cone_kd, g_cone_limit);
-            pid_clear(); // 清空积分项和前误差
+
+            // 只在第一次触发时切换PID
+            if (ConeInformation.findcone == false) {
+                std::cout << "[PID] Switching to CONE parameters." << std::endl;
+                // 使用锥桶PID参数（带独立限幅）
+                pid_set(g_cone_kp, g_cone_ki, g_cone_kd, g_cone_limit);
+                pid_clear(); // 清空积分项与前误差
+            }
             ConeInformation.findcone = true;
         }
         // --- 新逻辑结束 ---
