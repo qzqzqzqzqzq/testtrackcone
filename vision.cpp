@@ -37,7 +37,7 @@ extern ThreadSafeQueue<cv::Mat> g_frame_queue; // 从 main.cpp 引入全局队列
 
 void vision_loop()
 {
-    cv::VideoCapture cap("testline.mp4");
+    cv::VideoCapture cap(2);
 	//创建一个对象，用于储存照片
 	cv::Mat frame;
 
@@ -59,7 +59,7 @@ void vision_loop()
 		}
 		else if(VisionTaskState == State::ToBlueCone)
 		{
-            updateTargetRoute(frame_clone);
+            updateTargetRoute2(frame_clone);
             IMfr.fetch_add(1);//帧率计数
             //-------测试--------
             //std::tuple<double, cv::Vec4f, cv::Vec4f> res = DetectLeftRightLines(frame_clone);
@@ -227,6 +227,177 @@ void FindBlueBarrier(cv::Mat frame_clone, BlueBarrierInit& config)
 
 }
 //>>>>>规划绕行锥桶路线<<<<<<<
+struct LaneInfo {
+    int beginline_y = 350;                  // 起始扫描行的 y 坐标
+    int endline_y = 275;                    // 终止扫描行的 y 坐标
+
+    std::vector<cv::Point> left_line;       // 左边线坐标点集
+    std::vector<cv::Point> right_line;      // 右边线坐标点集
+    std::vector<cv::Point> mid_line;        // 中线坐标点集
+
+    int begin_mid_x = 320;                  //每次扫描时认为的中心点（初始值为320）
+
+    int consecutive_count = 3;   // 要求的连续白点个数
+    int current_count = 0;       // 实时计数器，用于扫描时记录连续白点数量
+};
+LaneInfo FindMidLineConfig;
+void FindMidLine(cv::Mat binary, LaneInfo& config)
+{
+    //清除上一帧储存的点集
+    config.left_line.clear();
+    config.right_line.clear();
+    config.mid_line.clear();
+    for (int y = config.beginline_y; y >= config.endline_y; y--)
+    {
+        int to_left = config.begin_mid_x;
+        int to_right = config.begin_mid_x;
+        bool find_left = false;
+        bool find_right = false;
+        //>>>>>>>>>>寻找左点<<<<<<<<<<<<<
+        while (to_left > 0)
+        {
+            if (binary.at<uchar>(y, to_left) == 255)
+            {
+                config.current_count++;
+                if (config.current_count >= config.consecutive_count)
+                {
+                    config.left_line.push_back(cv::Point(to_left, y));
+                    find_left = true;
+                    break;
+                }
+            }
+            else
+            {
+                config.current_count = 0; // 重新计数
+            }
+            to_left--;                    //to_left向左移动一位
+        }
+        if (find_left == false)
+        {
+            config.left_line.push_back(cv::Point(0, y));//没找到左线就认为左边界就是线
+        }
+        //>>>>>>>>>>寻找右点<<<<<<<<<<<<<
+        config.current_count = 0;  // 清零计数器给寻找右线使用，重新计数
+        while (to_right < binary.cols - 1)
+        {
+            if (binary.at<uchar>(y, to_right) == 255)
+            {
+                config.current_count++;
+                if (config.current_count >= config.consecutive_count)
+                {
+                    config.right_line.push_back(cv::Point(to_right, y));
+                    find_right = true;
+                    break;
+                }
+
+            }
+            else
+            {
+                config.current_count = 0; // 重新计数
+            }
+            to_right++;                   //to_right向右移动一位
+        }
+        if (find_right == false)
+        {
+            config.right_line.push_back(cv::Point(binary.cols - 1, y));//没找到右线就认为右边界就是线
+        }
+        //>>>>>>>>>>计算中点<<<<<<<<<<<<<
+        cv::Point left_point = config.left_line.back();     //取出左点
+        cv::Point right_point = config.right_line.back();   //取出右点
+        cv::Point mid_point((left_point.x + right_point.x) / 2, y);//计算中点
+        config.mid_line.push_back(mid_point);
+        //>>>>更新下一行的起始扫描位置<<<<<
+        config.begin_mid_x = mid_point.x;
+    }
+}
+cv::Mat DrawLines(cv::Mat frame,
+    const std::vector<cv::Point>& left_line,
+    const std::vector<cv::Point>& mid_line,
+    const std::vector<cv::Point>& right_line)
+{
+    // 左边线：绿色
+    if (!left_line.empty()) {
+        cv::polylines(frame, left_line, false, cv::Scalar(0, 255, 0), 2);
+    }
+
+    // 右边线：红色
+    if (!right_line.empty()) {
+        cv::polylines(frame, right_line, false, cv::Scalar(0, 0, 255), 2);
+    }
+
+    // 中线：蓝色
+    if (!mid_line.empty()) {
+        cv::polylines(frame, mid_line, false, cv::Scalar(255, 0, 0), 2);
+    }
+    return frame;
+}
+cv::Point getOddIndicesAvgPoint(const std::vector<cv::Point>& points,
+    const cv::Point& default_point = cv::Point(160, 48))
+{
+    if (points.size() < 2) {
+        // 向量必须至少有2个元素才能有 "奇数索引 1"
+        return default_point;
+    }
+
+    // 使用 long 来累加，防止整数溢出
+    long sum_x = 0;
+    long sum_y = 0;
+    int count = 0; // 奇数项的计数器
+
+    // 从 i = 1 (第一个奇数索引) 开始，每次跳 2
+    for (size_t i = 1; i < points.size(); i += 2) {
+        sum_x += points[i].x; // 累加 x
+        sum_y += points[i].y; // 累加 y
+        count++;
+    }
+
+    if (count == 0) {
+        return default_point;
+    }
+
+    // 计算平均值并使用 cvRound 四舍五入到最近的整数
+    int avg_x = cvRound(static_cast<double>(sum_x) / count);
+    int avg_y = cvRound(static_cast<double>(sum_y) / count);
+
+    return cv::Point(avg_x, avg_y);
+}
+void updateTargetRoute2(const cv::Mat& frame_clone) {
+    cv::Rect roi_rect(0, (frame_clone.rows / 2 - 90 + 60), frame_clone.cols, (frame_clone.rows / 2.5));
+    cv::Mat cropped_image = frame_clone(roi_rect).clone();
+    cv::resize(cropped_image, cropped_image, cv::Size(), 0.5, 0.5);
+    gammaCorrection(cropped_image, cropped_image);
+    cv::Mat cropped_imageclone = cropped_image.clone();
+
+    gammaCorrection(cropped_image, cropped_image);
+
+    cv::Mat hsv_image;
+    cv::cvtColor(cropped_image, hsv_image, cv::COLOR_BGR2HSV);//////////////////
+
+    cv::Mat gray_image;
+    cv::cvtColor(cropped_image, gray_image, cv::COLOR_BGR2GRAY);
+    cv::Mat blur;
+    cv::bilateralFilter(gray_image, blur, 7, 60, 60);
+    cv::Mat gaussian_blur;
+    cv::GaussianBlur(blur, gaussian_blur, cv::Size(5, 5), 30);
+    cv::Mat ca;
+    cv::Canny(gaussian_blur, ca, 30, 50);
+    cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2, 2));
+    cv::Mat dilated_ca;
+    cv::dilate(ca, dilated_ca, kernel, cv::Point(-1, -1), 2);
+    FindMidLine(dilated_ca, FindMidLineConfig);
+    cv::Point midpoint;
+    midpoint = getOddIndicesAvgPoint(FindMidLineConfig.mid_line);
+    int error = midpoint.x - 160;
+    lane_error.store(error);
+    if (ConeInformation.debug_enabled) {
+        cropped_imageclone = DrawLines(cropped_imageclone, FindMidLineConfig.left_line, FindMidLineConfig.mid_line, FindMidLineConfig.right_line);
+        cv::circle(cropped_imageclone, midpoint, 3, cv::Scalar(255, 255, 0), -1);
+        cv::imshow("data", cropped_imageclone);
+        std::cerr << "ERROR: " << error <<std::endl;
+    }
+
+
+}
 void updateTargetRoute(const cv::Mat& frame_clone)
 {
     // 锥桶与循迹共用,处理得到cropped_image
@@ -240,7 +411,7 @@ void updateTargetRoute(const cv::Mat& frame_clone)
     double error, left_line_fitX, right_line_fitX;
     cv::Vec4f left_line_fit, right_line_fit;
     std::tie(error, left_line_fit, right_line_fit, left_line_fitX, right_line_fitX) = res;
-    //lane_error.store(error);
+    lane_error.store(error);
     // 回传数据
     std::lock_guard<std::mutex> lock(g_results_mutex);
     g_results.push_back({ error, left_line_fit, right_line_fit });
