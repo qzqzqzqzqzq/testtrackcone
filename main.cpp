@@ -105,8 +105,7 @@ int main() {
     }
 
     servo_init(105, 90, 120);
-    // (修改) 用全局原始PID参数初始化PID
-    pid_init(g_orig_kp, g_orig_ki, g_orig_kd, g_orig_limit);
+    pid_init(0, 0, 0, 15);//先给个0，0，0，15
 
     //测试
     VisionTaskState = State::ToBlueCone; // From vision.h
@@ -115,6 +114,10 @@ int main() {
     //初始化帧率检测进程
     std::thread thread3(timedelayIT);
     std::thread t_vision(vision_loop);    //视觉处理线程
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));//稳定图像
+    std::cout << "<<<<<<<<<<<<<<<<<<<<To stabilize the image<<<<<<<<<<<<<<<<<<<<<<<<<<<" << std::endl;
+    // 正式初始化PID
+    pid_init(g_orig_kp, g_orig_ki, g_orig_kd, g_orig_limit);
     std::thread t_control(control_loop_timer); //电机，舵机控制线程
 
     // --- Streaming thread removed ---

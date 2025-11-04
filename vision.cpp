@@ -393,7 +393,7 @@ void updateTargetRoute2(const cv::Mat& frame_clone) {
         cropped_imageclone = DrawLines(cropped_imageclone, FindMidLineConfig.left_line, FindMidLineConfig.mid_line, FindMidLineConfig.right_line);
         cv::circle(cropped_imageclone, midpoint, 3, cv::Scalar(255, 255, 0), -1);
         cv::imshow("data", cropped_imageclone);
-        std::cerr << "ERROR: " << error <<std::endl;
+        cv::waitKey(1);
     }
 
 

@@ -65,6 +65,7 @@ void controlServoWithPID()
     double angle = +g_middle_angle - delta_angle;
         // 4. 输出控制信号到舵机
         servo_control(angle);
+        std::cerr << "ERROR: " << error <<"ANGLE:"<< angle<<std::endl;
 
 }
 
